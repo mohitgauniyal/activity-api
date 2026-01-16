@@ -1,0 +1,12 @@
+{
+  "name": "activity-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2024-01-13",
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "activity_feed",
+      "database_id": "cf3926b6-18f0-4089-b24f-a4208c94e202"
+    }
+  ]
+}
