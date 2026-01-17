@@ -26,11 +26,49 @@ export default {
       const method = request.method === "HEAD" ? "GET" : request.method;
 
       // ====================
+      // CORS CONFIG
+      // ====================
+      const allowedOrigins = [
+        "http://localhost:3000",
+        "https://mohitgauniyal.netlify.app"
+      ];
+
+      const origin = request.headers.get("Origin");
+      const isAllowed = origin && (allowedOrigins.includes(origin) || origin.endsWith("mohitgauniyal.netlify.app"));
+
+      const corsHeaders = {
+        "Access-Control-Allow-Origin": isAllowed ? origin : "*",
+        "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type, x-admin-token",
+        "Access-Control-Max-Age": "86400",
+      };
+
+      // Handle Preflight
+      if (method === "OPTIONS") {
+        return new Response(null, { headers: corsHeaders });
+      }
+
+      // Helper to wrap responses with CORS
+      const jsonResponse = (data: any, status = 200) => {
+        return new Response(JSON.stringify(data), {
+          status,
+          headers: {
+            "Content-Type": "application/json",
+            ...corsHeaders
+          }
+        });
+      };
+
+      const errorResponse = (msg: string, status: number) => {
+        return new Response(msg, { status, headers: corsHeaders });
+      };
+
+      // ====================
       // PUBLIC ROUTES
       // ====================
 
       if (path === "/" && method === "GET") {
-        return Response.json({
+        return jsonResponse({
           service: "activity-api",
           status: "ok",
           endpoints: [
@@ -45,43 +83,41 @@ export default {
       }
 
       if (path === "/status" && method === "GET") {
-        return getStatus(env);
+        const data = await getStatus(env);
+        return jsonResponse(data);
       }
 
       if (path === "/logs" && method === "GET") {
-        return getLogs(env, request);
+        const data = await getLogs(env, request);
+        return jsonResponse(data);
       }
 
       // ====================
       // ADMIN ROUTES
       // ====================
       if (path === "/logs" && method === "POST") {
-        if (!isAuthorized(request, env)) {
-          return new Response("Unauthorized", { status: 401 });
-        }
-        return createLog(env, request);
+        if (!isAuthorized(request, env)) return errorResponse("Unauthorized", 401);
+        const res = await createLog(env, request);
+        return jsonResponse(res);
       }
 
       if (path === "/status" && method === "POST") {
-        if (!isAuthorized(request, env)) {
-          return new Response("Unauthorized", { status: 401 });
-        }
-        return upsertStatus(env, request);
+        if (!isAuthorized(request, env)) return errorResponse("Unauthorized", 401);
+        const res = await upsertStatus(env, request);
+        return jsonResponse(res);
       }
 
       if (path.startsWith("/status/") && method === "DELETE") {
-        if (!isAuthorized(request, env)) {
-          return new Response("Unauthorized", { status: 401 });
-        }
+        if (!isAuthorized(request, env)) return errorResponse("Unauthorized", 401);
         const id = Number(path.split("/")[2]);
-        return deleteStatus(env, id);
+        const res = await deleteStatus(env, id);
+        return jsonResponse(res);
       }
 
       if (path === "/status/reorder" && method === "POST") {
-        if (!isAuthorized(request, env)) {
-          return new Response("Unauthorized", { status: 401 });
-        }
-        return reorderStatus(env, request);
+        if (!isAuthorized(request, env)) return errorResponse("Unauthorized", 401);
+        const res = await reorderStatus(env, request);
+        return jsonResponse(res);
       }
 
       // ====================
@@ -89,7 +125,7 @@ export default {
       // ====================
       return new Response(
         JSON.stringify({ error: "Not Found" }),
-        { status: 404, headers: { "Content-Type": "application/json" } }
+        { status: 404, headers: { "Content-Type": "application/json", ...corsHeaders } }
       );
     } catch (err: any) {
       return new Response(
@@ -97,7 +133,7 @@ export default {
           error: "Internal Server Error",
           message: err?.message,
         }),
-        { status: 500 }
+        { status: 500, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } }
       );
     }
   }
@@ -123,8 +159,9 @@ async function getStatus(env: any) {
     }
   }
 
-  return Response.json(data);
+  return data;
 }
+
 async function getLogs(env: any, request: Request) {
   const url = new URL(request.url);
 
@@ -147,7 +184,7 @@ async function getLogs(env: any, request: Request) {
     .bind(limit)
     .all();
 
-  return Response.json(result.results);
+  return result.results;
 }
 
 
@@ -156,7 +193,7 @@ async function createLog(env: any, request: Request) {
   const { type, message } = body;
 
   if (!type || !message) {
-    return new Response("Missing fields", { status: 400 });
+    throw new Error("Missing fields");
   }
 
   await env.DB.prepare(
@@ -165,7 +202,7 @@ async function createLog(env: any, request: Request) {
     .bind(type, message)
     .run();
 
-  return Response.json({ success: true });
+  return { success: true };
 }
 
 // -------- STATUS UPSERT (CREATE + PARTIAL UPDATE) --------
@@ -176,13 +213,13 @@ async function upsertStatus(env: any, request: Request) {
 
   // validate section if provided
   if (section !== undefined && !VALID_SECTIONS.includes(section)) {
-    return new Response("Invalid section", { status: 400 });
+    throw new Error("Invalid section");
   }
 
   // -------- CREATE --------
   if (!id) {
     if (!section || !title) {
-      return new Response("Missing fields", { status: 400 });
+      throw new Error("Missing fields");
     }
 
     await env.DB.prepare(`
@@ -198,7 +235,7 @@ async function upsertStatus(env: any, request: Request) {
       )
       .run();
 
-    return Response.json({ success: true });
+    return { success: true };
   }
 
   // -------- UPDATE (partial allowed) --------
@@ -227,7 +264,7 @@ async function upsertStatus(env: any, request: Request) {
   }
 
   if (!updates.length) {
-    return new Response("No fields to update", { status: 400 });
+    throw new Error("No fields to update");
   }
 
   await env.DB.prepare(`
@@ -238,11 +275,11 @@ async function upsertStatus(env: any, request: Request) {
     .bind(...values, id)
     .run();
 
-  return Response.json({ success: true });
+  return { success: true };
 }
 
 async function deleteStatus(env: any, id: number) {
-  if (!id) return new Response("Invalid ID", { status: 400 });
+  if (!id) throw new Error("Invalid ID");
 
   await env.DB.prepare(`
     UPDATE status_items SET is_active=0 WHERE id=?
@@ -250,18 +287,18 @@ async function deleteStatus(env: any, id: number) {
     .bind(id)
     .run();
 
-  return Response.json({ success: true });
+  return { success: true };
 }
 
 async function reorderStatus(env: any, request: Request) {
   const { section, ids } = await request.json();
 
   if (!section || !Array.isArray(ids)) {
-    return new Response("Invalid payload", { status: 400 });
+    throw new Error("Invalid payload");
   }
 
   if (!VALID_SECTIONS.includes(section)) {
-    return new Response("Invalid section", { status: 400 });
+    throw new Error("Invalid section");
   }
 
   const stmt = env.DB.prepare(
@@ -273,5 +310,4 @@ async function reorderStatus(env: any, request: Request) {
     await stmt.bind(pos++, id, section).run();
   }
 
-  return Response.json({ success: true });
-}
+  return { success: true };
