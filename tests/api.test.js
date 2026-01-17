@@ -1,3 +1,7 @@
+require("dotenv").config({
+  path: require("path").resolve(__dirname, "../.dev.vars"),
+});
+
 const BASE = process.env.BASE;
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
 

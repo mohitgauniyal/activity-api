@@ -125,9 +125,18 @@ async function getStatus(env: any) {
 
   return Response.json(data);
 }
-
 async function getLogs(env: any, request: Request) {
-  const limit = Number(new URL(request.url).searchParams.get("limit") ?? 10);
+  const url = new URL(request.url);
+
+  let limit = Number(url.searchParams.get("limit") ?? 10);
+
+  // sanitize
+  if (!Number.isFinite(limit) || limit <= 0) {
+    limit = 10;
+  }
+
+  // hard cap (optional but recommended)
+  limit = Math.min(limit, 10);
 
   const result = await env.DB.prepare(`
     SELECT id, type, message, created_at
@@ -140,6 +149,7 @@ async function getLogs(env: any, request: Request) {
 
   return Response.json(result.results);
 }
+
 
 async function createLog(env: any, request: Request) {
   const body = await request.json();
