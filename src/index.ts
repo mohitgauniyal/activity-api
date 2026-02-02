@@ -144,23 +144,28 @@ export default {
 // ====================
 
 async function getStatus(env: any) {
-  const result = await env.DB.prepare(`
+  const building = await env.DB.prepare(`
     SELECT id, section, title, description, position
     FROM status_items
-    WHERE is_active = 1
-    ORDER BY section, position
+    WHERE is_active = 1 AND section = 'building'
+    ORDER BY created_at DESC
+    LIMIT 2
   `).all();
 
-  const data: Record<string, any[]> = { building: [], learning: [] };
+  const learning = await env.DB.prepare(`
+    SELECT id, section, title, description, position
+    FROM status_items
+    WHERE is_active = 1 AND section = 'learning'
+    ORDER BY created_at DESC
+    LIMIT 2
+  `).all();
 
-  for (const row of result.results) {
-    if (row.section in data) {
-      data[row.section].push(row);
-    }
-  }
-
-  return data;
+  return {
+    building: building.results,
+    learning: learning.results,
+  };
 }
+
 
 async function getLogs(env: any, request: Request) {
   const url = new URL(request.url);
