@@ -1,237 +1,106 @@
-# Activity API
+# 🚀 Activity API
 
-A small, production-ready backend to log activity updates and expose current status (`building`, `learning`) over HTTP.
+A small, production-ready backend to log activity updates and expose current status (`building`, `learning`) over HTTP. Designed for long-term personal use as a single source of truth for activity logs and current status.
 
-This API is designed for long-term personal use and acts as a single source of truth for:
-- activity logs
-- current work and learning status
+**Live URL:** [https://activity-api.mohitgauniyal.workers.dev](https://activity-api.mohitgauniyal.workers.dev)
 
-Live URL:  
-https://activity-api.mohitgauniyal.workers.dev
-
-##### Code -> Local Test -> Git Commit/Push -> Deploy
 ---
 
-## Development & Deployment Workflow
+## 🛠 Features
 
-### Local development
+- **Activity Logs**: Append-only logs for tracking progress.
+- **Status Tracking**: Manage active `building` and `learning` items.
+- **Secure Admin**: Protected endpoints using `x-admin-token`.
+- **D1 Database**: Powered by Cloudflare D1 for high availability.
+
+---
+
+## 🚀 Quick Start
+
+### Local Development
 Run the API locally for testing:
 ```bash
-wrangler dev
+npm run dev
 ```
 
----
-
-### Deploying to production
-Push the current code live:
+### Deployment
+Push the current code live to Cloudflare Workers:
 ```bash
-wrangler deploy
+npm run deploy
 ```
-
-This is the **only command** that updates the live API.  
-Editing files alone does not affect production.
+> [!NOTE]
+> This is the **only command** that updates the live API. Editing files alone does not affect production.
 
 ---
 
-### Recommended daily flow
-```text
-Edit code
-↓
-wrangler dev
-↓
-git commit
-↓
-wrangler deploy
-```
+## 🔐 Configuration
 
----
-
-## Secrets
-
-Admin-only endpoints require an admin token.
-
-Set once:
+### Secrets
+Admin-only endpoints require an admin token. Set it once using:
 ```bash
 wrangler secret put ADMIN_TOKEN
 ```
-
 Secrets are stored securely and persist across deployments.
 
 ---
 
-## Database Notes
+## 💾 Database Management
 
-- Activity logs are **append-only**
-- Status items are **soft-deleted** (`is_active = 0`)
-- Older status entries are preserved for history
+- Activity logs are **append-only**.
+- Status items are **soft-deleted** (`is_active = 0`).
+- Schema changes must be applied manually.
 
-Schema changes must be applied manually.
+### Apply Schema Changes
 
-### Apply schema changes
-
-Local database:
+**Local Database:**
 ```bash
 wrangler d1 execute DB --local --file=db/schema.sql
 ```
 
-Production database:
+**Production Database:**
 ```bash
 wrangler d1 execute DB --remote --file=db/schema.sql
 ```
 
 ---
 
-## API Endpoints
+## 📡 API Endpoints
 
 ### Public Endpoints
 
-#### Get current status
+#### Get Current Status
 Returns active `building` and `learning` items.
+- **GET** `/status`
+- **Example:** `curl https://activity-api.mohitgauniyal.workers.dev/status`
 
-```http
-GET /status
-```
-
-Example:
-```bash
-curl https://activity-api.mohitgauniyal.workers.dev/status
-```
-
-Response:
-```json
-{
-  "building": [],
-  "learning": []
-}
-```
-
----
-
-#### Get activity logs
+#### Get Activity Logs
 Returns recent logs (newest first).
-
-```http
-GET /logs?limit=10
-```
-
-Example:
-```bash
-curl https://activity-api.mohitgauniyal.workers.dev/logs
-```
-
-Response:
-```json
-[
-  {
-    "id": 1,
-    "type": "tech",
-    "message": "Backend API wired successfully.",
-    "created_at": "2026-01-13 05:14:41"
-  }
-]
-```
+- **GET** `/logs?limit=10`
+- **Example:** `curl https://activity-api.mohitgauniyal.workers.dev/logs`
 
 ---
 
-### Admin Endpoints  
-(All require `x-admin-token` header)
+### Admin Endpoints
+*(All require `x-admin-token` header)*
 
-#### Create a log
-```http
-POST /logs
-```
+#### Create a Log
+- **POST** `/logs`
+- **Body:** `{"type":"tech","message":"..."}`
 
-Example:
-```bash
-curl -X POST https://activity-api.mohitgauniyal.workers.dev/logs \
-  -H "Content-Type: application/json" \
-  -H "x-admin-token: YOUR_ADMIN_TOKEN" \
-  -d '{"type":"tech","message":"Did something useful"}'
-```
+#### Create or Update Status
+- **POST** `/status`
+- **Body (Create):** `{"section":"building","title":"..."}`
+- **Body (Update):** `{"id":1,"section":"building","title":"..."}`
 
----
+#### Delete Status (Soft Delete)
+- **DELETE** `/status/:id`
 
-#### Create or update a status item
-```http
-POST /status
-```
-
-Create:
-```bash
-curl -X POST https://activity-api.mohitgauniyal.workers.dev/status \
-  -H "Content-Type: application/json" \
-  -H "x-admin-token: YOUR_ADMIN_TOKEN" \
-  -d '{"section":"building","title":"Activity Feed API"}'
-```
-
-Update:
-```bash
-curl -X POST https://activity-api.mohitgauniyal.workers.dev/status \
-  -H "Content-Type: application/json" \
-  -H "x-admin-token: YOUR_ADMIN_TOKEN" \
-  -d '{"id":1,"section":"building","title":"Updated title"}'
-```
+#### Reorder Status
+- **POST** `/status/reorder`
+- **Body:** `{"section":"building","ids":[3,1,2]}`
 
 ---
 
-#### Delete a status item (soft delete)
-```http
-DELETE /status/:id
-```
+## ⚖️ License
 
-Example:
-```bash
-curl -X DELETE https://activity-api.mohitgauniyal.workers.dev/status/1 \
-  -H "x-admin-token: YOUR_ADMIN_TOKEN"
-```
-
----
-
-#### Reorder status items
-```http
-POST /status/reorder
-```
-
-Example:
-```bash
-curl -X POST https://activity-api.mohitgauniyal.workers.dev/status/reorder \
-  -H "Content-Type: application/json" \
-  -H "x-admin-token: YOUR_ADMIN_TOKEN" \
-  -d '{"section":"building","ids":[3,1,2]}'
-```
-
----
-
-## Error Behavior
-
-- Unauthorized admin access → `401 Unauthorized`
-- Invalid payloads → `400 Bad Request`
-- Unknown routes → `404 Not Found`
-
----
-
-## Notes
-
-- All timestamps are stored in UTC
-- Clients are expected to format time locally
-- This API is intended to be consumed by:
-  - personal websites
-  - admin panels
-  - Telegram bots
-
----
-
-## Deployment Safety
-
-- Each deploy creates a new immutable version
-- Rollback is done by redeploying an older git commit
-- Deployments are atomic (no downtime)
-
----
-
-## Status
-
-- Production: ✅ live  
-- Database: ✅ initialized  
-- Secrets: ✅ configured  
-- Safe to extend
+This project is licensed under the [MIT License](LICENSE).
